@@ -1,0 +1,35 @@
+name: Restore recovered AiMS website
+on:
+  push:
+    branches: [website-recovery]
+    paths: ['.github/workflows/restore-website.yml']
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: website-recovery
+      - name: Validate and extract recovery package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object aims-recovered-site.zip)" = bcfa2313f5c5fa07c93b02d4162001699118bf4d
+          python - <<'PY'
+          import zipfile
+          from pathlib import PurePosixPath
+          with zipfile.ZipFile('aims-recovered-site.zip') as archive:
+              assert archive.testzip() is None
+              for item in archive.infolist():
+                  path = PurePosixPath(item.filename)
+                  assert not path.is_absolute() and '..' not in path.parts
+                  assert path.parts[0] in {'README.md','index.html','assets','about','circle','deep-dive-diagnostic','finding-the-perfect-match','free-marketing-report','growth-suite','website-design'}
+              archive.extractall('.')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md index.html assets about circle deep-dive-diagnostic finding-the-perfect-match free-marketing-report growth-suite website-design
+          git diff --cached --quiet || git commit -m 'Restore eight AiMS website pages and assets'
+          git push origin HEAD:website-recovery
